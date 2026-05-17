@@ -22,6 +22,7 @@ All symbols are consistent with those in [Yahoo Finance](https://finance.yahoo.c
 | dax       | DAX               | 2023/07  | [json](https://yfiua.github.io/index-constituents/constituents-dax.json) / [csv](https://yfiua.github.io/index-constituents/constituents-dax.csv)             |
 | hsi       | HSI (恒生指数)    | 2023/07  | [json](https://yfiua.github.io/index-constituents/constituents-hsi.json) / [csv](https://yfiua.github.io/index-constituents/constituents-hsi.csv)             |
 | ftse100   | FTSE 100          | 2023/07  | [json](https://yfiua.github.io/index-constituents/constituents-ftse100.json) / [csv](https://yfiua.github.io/index-constituents/constituents-ftse100.csv)     |
+| ftsemib   | FTSE MIB          | 2024/03  | [json](https://yfiua.github.io/index-constituents/constituents-ftsemib.json) / [csv](https://yfiua.github.io/index-constituents/constituents-ftsemib.csv)     |
 
 ## Usage
 ### Direct download
@@ -63,6 +64,7 @@ Historical data of a particular index is only available from the month we start 
 * [深交所](http://www.szse.cn/)
 * [Slickcharts](https://www.slickcharts.com/)
 * [Bloomberg](https://www.bloomberg.com/)
+* [Wikipedia](https://www.wikipedia.org/)
 * [乌龟量化](https://wglh.com/) - deprecated
 
 ## Author
