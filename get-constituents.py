@@ -6,6 +6,7 @@ import random
 import requests
 import sys
 import time
+from io import StringIO
 
 from selectorlib import Extractor
 
@@ -59,6 +60,50 @@ def get_constituents_from_slickcharts(url):
     df = pd.DataFrame(data)
 
     return df
+
+def get_constituents_from_wikipedia(url, suffix='', headers=None):
+    if headers is None:
+        headers = { 'User-Agent' : 'Mozilla/5.0' }
+    r = requests.get(url, headers=headers)
+    r.raise_for_status()
+
+    tables = pd.read_html(StringIO(r.text))
+
+    for table in tables:
+        if isinstance(table.columns, pd.MultiIndex):
+            table = table.copy()
+            table.columns = [
+                ' '.join(str(part) for part in col if str(part) != 'nan').strip()
+                for col in table.columns
+            ]
+
+        symbol_col = next(
+            (
+                col for col in table.columns
+                if str(col).strip().lower() in ['ticker', 'symbol', 'code']
+            ),
+            None,
+        )
+        name_col = next(
+            (
+                col for col in table.columns
+                if str(col).strip().lower() in ['company', 'security', 'company name']
+            ),
+            None,
+        )
+
+        if symbol_col and name_col:
+            df = table[[symbol_col, name_col]].copy()
+            df.columns = ['Symbol', 'Name']
+            df['Symbol'] = df['Symbol'].astype(str).str.strip()
+            df['Name'] = df['Name'].astype(str).str.strip()
+            if suffix:
+                df['Symbol'] = df['Symbol'].apply(
+                    lambda symbol: symbol if symbol.endswith(suffix) else symbol + suffix
+                )
+            return df
+
+    raise ValueError(f'Could not find a constituents table on {url}')
 
 # 沪深300
 def get_constituents_csi300():
@@ -205,6 +250,11 @@ def get_constituents_ftse100():
 
     return df
 
+# FTSE MIB
+def get_constituents_ftsemib():
+    url = 'https://en.wikipedia.org/wiki/FTSE_MIB'
+    return get_constituents_from_wikipedia(url, suffix='.MI')
+
 # main
 if __name__ == '__main__':
     # track status
@@ -335,6 +385,15 @@ if __name__ == '__main__':
             continue
         else:
             break
+
+    print('Fetching the constituents of FTSE MIB...')
+    try:
+        df = get_constituents_ftsemib()
+        df.to_csv('docs/constituents-ftsemib.csv', index=False)
+        df.to_json('docs/constituents-ftsemib.json', orient='records')
+    except:
+        status = 1
+        print('Failed to fetch the constituents of FTSE MIB.')
 
     print('Done.')
 
