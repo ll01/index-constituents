@@ -3,15 +3,21 @@
 
 import pandas as pd
 import random
+import re
 import requests
 import sys
 import time
+from io import StringIO
 
 from selectorlib import Extractor
 
 from fake_useragent import UserAgent
 ua = UserAgent()
 n_retries = 5
+
+STOXX_HEADERS = {
+    'User-Agent': 'index-constituents-stoxx-fetcher/1.0 (https://github.com/yfiua/index-constituents)'
+}
 
 def get_constituents_from_csindex(url):
     # convert symbol from 'SYMBOL' to 'SYMBOL.SZ' or 'SYMBOL.SS'
@@ -57,6 +63,37 @@ def get_constituents_from_slickcharts(url):
 
     data = e.extract(r.text)
     df = pd.DataFrame(data)
+
+    return df
+
+def convert_stoxx_ric_symbol(ric):
+    if ric.endswith('.S'):
+        return ric[:-2] + '.SW'
+    if ric.endswith('.I'):
+        return ric[:-2] + '.IR'
+    return ric
+
+def get_stoxx_selection_list_url(index_symbol):
+    url = f'https://www.stoxx.com/data-index-details?symbol={index_symbol.upper()}'
+    r = requests.get(url, headers=STOXX_HEADERS)
+    r.raise_for_status()
+
+    pattern = rf"https://www\.stoxx\.com/documents/stoxxnet/Documents/Reports/STOXXSelectionList/[^']+/slpublic_{index_symbol.lower()}_\d+\.csv"
+    match = re.search(pattern, r.text)
+    if not match:
+        raise ValueError(f'Could not find STOXX selection list for {index_symbol}')
+
+    return match.group(0)
+
+def get_constituents_from_stoxx_selection_list(url):
+    r = requests.get(url, headers=STOXX_HEADERS)
+    r.raise_for_status()
+
+    df = pd.read_csv(StringIO(r.text), sep=';', dtype=str)
+    df = df[df['Index Membership'].isin(['Large', 'Mid', 'Small'])]
+    df = df[['RIC', 'Instrument_Name']].copy()
+    df.columns = ['Symbol', 'Name']
+    df['Symbol'] = df['Symbol'].apply(convert_stoxx_ric_symbol)
 
     return df
 
@@ -205,6 +242,11 @@ def get_constituents_ftse100():
 
     return df
 
+# STOXX Europe 600
+def get_constituents_stoxx600():
+    url = get_stoxx_selection_list_url('sxxp')
+    return get_constituents_from_stoxx_selection_list(url)
+
 # main
 if __name__ == '__main__':
     # track status
@@ -335,6 +377,15 @@ if __name__ == '__main__':
             continue
         else:
             break
+
+    print('Fetching the constituents of STOXX Europe 600...')
+    try:
+        df = get_constituents_stoxx600()
+        df.to_csv('docs/constituents-stoxx600.csv', index=False)
+        df.to_json('docs/constituents-stoxx600.json', orient='records')
+    except:
+        status = 1
+        print('Failed to fetch the constituents of STOXX Europe 600.')
 
     print('Done.')
 
