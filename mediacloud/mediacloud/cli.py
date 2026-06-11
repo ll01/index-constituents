@@ -23,8 +23,13 @@ from .server import serve
 
 
 def _s3(cfg: config_mod.Config):
-    if not cfg.s3_bucket:
-        raise SystemExit("No [s3] bucket configured — edit your mediacloud.toml.")
+    if not cfg.has_s3:
+        raise SystemExit(
+            "S3 is not configured.\n"
+            "Options:\n"
+            "  • Add an [s3] bucket to mediacloud.toml for cloud sync/publish.\n"
+            "  • Or use a local sync folder (OneDrive, Dropbox) as a library source instead."
+        )
     from .s3sync import S3Sync
 
     return S3Sync(
@@ -170,6 +175,11 @@ def cmd_status(args: argparse.Namespace) -> None:
         total_bytes += size
         print(f"  {series_dir.name}: {len(files)} file(s), {size / 1e9:.2f} GB")
     print(f"Total: {total_files} file(s), {total_bytes / 1e9:.2f} GB in {root}")
+    print()
+    if cfg.has_s3:
+        print(f"Remote: s3://{cfg.s3_bucket}/{cfg.s3_prefix}")
+    else:
+        print("Remote: not configured  (S3, or add a cloud sync folder to [library] sources)")
 
 
 def main(argv: list[str] | None = None) -> None:

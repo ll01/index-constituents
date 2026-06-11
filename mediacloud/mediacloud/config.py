@@ -17,7 +17,7 @@ EXAMPLE = """\
 [library]
 # Where the clean, organized library lives.
 root = "~/MediaCloud/Library"
-# Folders to scan for incoming video files (torrents, downloads...).
+# Folders to scan for incoming video files (torrents, downloads, OneDrive...).
 sources = [
     "~/Downloads",
 ]
@@ -29,23 +29,23 @@ threshold = 0.82
 [matcher.aliases]
 # "JJK" = "Jujutsu Kaisen"
 
-[s3]
-# Bucket on any S3-compatible service (AWS, MinIO, R2, B2...).
-bucket = ""
-# Leave empty for AWS; set for MinIO/R2/B2, e.g. "http://192.168.1.10:9000"
-endpoint_url = ""
-region = ""
-# Key prefix inside the bucket.
-prefix = "library"
-# Lifetime of presigned links in hours (AWS/R2/B2 cap is 7 days = 168h).
-publish_expires = 144
-# Credentials are read from the standard AWS chain:
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars, or ~/.aws/credentials
+# ── S3 is entirely optional ──────────────────────────────────────────────────
+# If you already have OneDrive/Google Drive/Dropbox, just add your sync folder
+# to [library] sources above instead — no S3 setup needed.
+# Only fill this in if you want S3-specific features: presigned URLs, publish,
+# sync/pull commands. Works with AWS, Cloudflare R2, Backblaze B2, MinIO.
+# [s3]
+# bucket = "my-media"
+# endpoint_url = ""   # leave empty for AWS; R2: "https://<id>.r2.cloudflarestorage.com"
+# region = ""
+# prefix = "library"
+# publish_expires = 144   # presigned link lifetime in hours (max 168 = 7 days)
+# Credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars, or ~/.aws/credentials
+# ─────────────────────────────────────────────────────────────────────────────
 
 [serve]
 port = 8080
-# Where files uploaded from the phone land. Defaults to the first
-# [library] source, so `mediacloud watch` organizes them automatically.
+# Where files uploaded from the phone land. Defaults to the first source folder.
 inbox = ""
 """
 
@@ -62,8 +62,12 @@ class Config:
     s3_prefix: str = "library"
     serve_port: int = 8080
     serve_inbox: str = ""
-    publish_expires: int = 144  # hours; 144h = 6 days (AWS S3 cap is 7 days)
+    publish_expires: int = 144
     path: Path | None = None
+
+    @property
+    def has_s3(self) -> bool:
+        return bool(self.s3_bucket)
 
     @property
     def inbox(self) -> Path | None:
