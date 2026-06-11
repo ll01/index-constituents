@@ -59,7 +59,19 @@ mediacloud serve                # stream over local Wi-Fi (port 8080)
 mediacloud sync                 # upload library to S3 (skips unchanged files)
 mediacloud pull                 # restore the library from S3 (new/replaced drive)
 mediacloud url jujutsu e025     # presigned download link for that episode
+
+mediacloud install [--serve]    # autostart watch (and serve) at login
+mediacloud uninstall            # remove the autostart entries
 ```
+
+`install` uses the OS's native scheduler: systemd user units on Linux,
+launchd agents on macOS, Task Scheduler on Windows. `--dry-run` shows
+exactly what would be written.
+
+With `pip install zeroconf`, `serve` also announces itself over mDNS: VLC's
+*Local Network* browser finds it by name, and most platforms can open
+`http://mediacloud.local:8080/` directly (note: many Android *browsers* can't
+resolve `.local` names — VLC discovery works there, or use the IP).
 
 ## The two transfer modes
 

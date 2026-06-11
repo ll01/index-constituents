@@ -25,6 +25,26 @@ def test_parse_episodes(name, title, season, episode):
     assert media.episode == episode
 
 
+@pytest.mark.parametrize(
+    "name,title,season,episode",
+    [
+        # Episode marker first, title after.
+        ("s03e01 DW.mkv", "Dw", 3, 1),
+        ("S01E05 Doctor Who.mkv", "Doctor Who", 1, 5),
+    ],
+)
+def test_parse_title_after_marker(name, title, season, episode):
+    media = parse(name)
+    assert (media.title, media.season, media.episode) == (title, season, episode)
+
+
+def test_marker_first_files_group_via_alias():
+    index = SeriesIndex(aliases={"DW": "Doctor Who"})
+    a = index.resolve(parse("s03e01 DW.mkv").title)
+    b = index.resolve(parse("S01E05 Doctor Who.mkv").title)
+    assert a == b == "Doctor Who"
+
+
 def test_parse_movie():
     media = parse("Spirited.Away.2001.1080p.BluRay.x264.mkv")
     assert media.title == "Spirited Away"
