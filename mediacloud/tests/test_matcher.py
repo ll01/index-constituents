@@ -38,6 +38,20 @@ def test_parse_title_after_marker(name, title, season, episode):
     assert (media.title, media.season, media.episode) == (title, season, episode)
 
 
+@pytest.mark.parametrize(
+    "name,season,episode,version",
+    [
+        ("[DubZoku] Jujutsu Kaisen - S03E10 v2 (WEB 1080p HEVC DDP) [Dual-Audio].mkv", 3, 10, 2),
+        ("[Yameii] Jujutsu Kaisen - S02E01 [English Dub] [CR WEB-DL 720p] [E00A2887] - Copy.mkv",
+         2, 1, 1),
+    ],
+)
+def test_parse_real_world_names(name, season, episode, version):
+    media = parse(name)
+    assert media.title == "Jujutsu Kaisen"
+    assert (media.season, media.episode, media.version) == (season, episode, version)
+
+
 def test_marker_first_files_group_via_alias():
     index = SeriesIndex(aliases={"DW": "Doctor Who"})
     a = index.resolve(parse("s03e01 DW.mkv").title)

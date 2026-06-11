@@ -103,6 +103,9 @@ file saves — use whatever player you like afterwards.
   go to `Movies/`, with the year if one is present.
 - **Duplicates** (`... - Copy.mkv`, re-downloads from another release group)
   parse to the same episode, map to the same library path, and are skipped.
+- **Versioned re-releases** (`... S03E10 v2 ...`) *replace* the existing
+  episode in the library instead of being skipped — release groups ship a v2
+  precisely because the v1 was broken.
 
 ## Watch mode
 

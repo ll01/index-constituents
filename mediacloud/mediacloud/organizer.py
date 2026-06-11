@@ -26,14 +26,28 @@ class PlannedFile:
     source: Path
     dest: Path
     series: str | None  # None for movies / unmatched
+    version: int = 1
 
 
 @dataclass
 class Report:
     linked: list[PlannedFile] = field(default_factory=list)
     copied: list[PlannedFile] = field(default_factory=list)
+    upgraded: list[PlannedFile] = field(default_factory=list)  # v2 replaced a v1
     skipped: list[PlannedFile] = field(default_factory=list)  # dest already exists
     planned: list[PlannedFile] = field(default_factory=list)  # dry-run only
+
+
+def _same_content(a: Path, b: Path) -> bool:
+    """True if the two paths are the same file (hardlink) or a faithful copy
+    (copy2 preserves size and mtime)."""
+    try:
+        if a.samefile(b):
+            return True
+        sa, sb = a.stat(), b.stat()
+        return sa.st_size == sb.st_size and sa.st_mtime == sb.st_mtime
+    except OSError:
+        return False
 
 
 def seed_from_library(library: Path, index: SeriesIndex) -> None:
@@ -79,11 +93,13 @@ def plan(sources: list[Path], library: Path, index: SeriesIndex,
                 / f"Season {season:02d}"
                 / f"{_safe(series)} - S{season:02d}E{media.episode:03d}{ext}"
             )
-            out.append(PlannedFile(source=path, dest=dest, series=series))
+            out.append(PlannedFile(source=path, dest=dest, series=series,
+                                   version=media.version))
         else:
             title = media.title + (f" ({media.year})" if media.year else "")
             dest = library / "Movies" / f"{_safe(title)}{ext}"
-            out.append(PlannedFile(source=path, dest=dest, series=None))
+            out.append(PlannedFile(source=path, dest=dest, series=None,
+                                   version=media.version))
     return out
 
 
@@ -93,17 +109,25 @@ def organize(sources: list[Path], library: Path, index: SeriesIndex,
     seed_from_library(library, index)
     report = Report()
     for item in plan(sources, library, index, only=only):
+        upgrade = False
         if item.dest.exists():
-            report.skipped.append(item)
-            continue
+            # A v2+ release replaces whatever is there — unless that is
+            # already this very file (keeps re-runs idempotent).
+            upgrade = item.version > 1 and not _same_content(item.source, item.dest)
+            if not upgrade:
+                report.skipped.append(item)
+                continue
         if dry_run:
             report.planned.append(item)
             continue
         item.dest.parent.mkdir(parents=True, exist_ok=True)
+        if upgrade:
+            item.dest.unlink()
         try:
             os.link(item.source, item.dest)
-            report.linked.append(item)
         except OSError:  # cross-device or filesystem without hardlink support
             shutil.copy2(item.source, item.dest)
-            report.copied.append(item)
+            report.upgraded.append(item) if upgrade else report.copied.append(item)
+            continue
+        report.upgraded.append(item) if upgrade else report.linked.append(item)
     return report

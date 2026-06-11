@@ -51,7 +51,9 @@ def cmd_organize(args: argparse.Namespace) -> None:
         print(f"  linked  {item.source.name}\n      ->  {item.dest}")
     for item in report.copied:
         print(f"  copied  {item.source.name}\n      ->  {item.dest}")
-    done = len(report.linked) + len(report.copied) + len(report.planned)
+    for item in report.upgraded:
+        print(f"  upgraded (v{item.version})  {item.source.name}\n      ->  {item.dest}")
+    done = len(report.linked) + len(report.copied) + len(report.upgraded) + len(report.planned)
     print(f"{done} file(s) {'planned' if args.dry_run else 'organized'}, "
           f"{len(report.skipped)} already in library.")
 
@@ -80,7 +82,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             if not ready:
                 continue
             report = organize(cfg.sources, cfg.library_root, index, only=ready)
-            for item in report.linked + report.copied:
+            for item in report.linked + report.copied + report.upgraded:
                 print(f"  {item.source.name}\n    ->  {item.dest}")
     except KeyboardInterrupt:
         print("\nStopped.")

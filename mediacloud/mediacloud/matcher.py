@@ -31,6 +31,7 @@ RELEASE_TAGS = {
 
 _BRACKETS_RE = re.compile(r"\[[^\]]*\]|\([^)]*\)|\{[^}]*\}")
 _YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+_VERSION_RE = re.compile(r"\bv(\d{1,2})\b", re.IGNORECASE)
 _ORDINAL_SEASON_RE = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)\s+season\b", re.IGNORECASE)
 _SEASON_WORD_RE = re.compile(r"\bseason\s+(\d{1,2})\b", re.IGNORECASE)
 
@@ -54,6 +55,8 @@ class ParsedMedia:
     season: int | None = None
     episode: int | None = None
     year: int | None = None
+    # Release version ("v2" = re-released fix); v2+ should replace a v1.
+    version: int = 1
     # True when the season came from the filename itself, as opposed to the
     # season-1 default (which a parent-folder hint may override).
     explicit_season: bool = False
@@ -72,6 +75,8 @@ def _clean_title(text: str) -> str:
     for word in text.split():
         if word.lower().strip(".-") in RELEASE_TAGS:
             break  # release tags mark the end of the title
+        if _VERSION_RE.fullmatch(word):
+            continue  # "v2" is a release version, never part of a title
         words.append(word)
     title = " ".join(words).strip(" -.")
     # Title-case fully-lower or fully-upper titles, leave mixed case alone.
@@ -137,8 +142,11 @@ def parse(filename: str) -> ParsedMedia:
     if episode is not None and season is None:
         season = 1
 
+    vm = _VERSION_RE.search(stem)
+    version = int(vm.group(1)) if vm else 1
+
     return ParsedMedia(raw_name=filename, title=title, season=season, episode=episode,
-                       year=year, explicit_season=explicit)
+                       year=year, version=version, explicit_season=explicit)
 
 
 _FOLDER_SEASON_RE = re.compile(r"\bs(?:eason\s*)?(\d{1,2})\b", re.IGNORECASE)
