@@ -229,6 +229,36 @@ def lan_addresses() -> list[str]:
     return sorted(a for a in addrs if not a.startswith("127."))
 
 
+def _qr_text(url: str) -> str | None:
+    """Render a QR code as Unicode block characters. Returns None if qrcode
+    is not installed (the URL is still printed as plain text)."""
+    try:
+        import qrcode
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(url)
+        qr.make(fit=True)
+        lines = []
+        matrix = qr.get_matrix()
+        # Two rows per terminal line using upper/lower half-block characters.
+        for y in range(0, len(matrix) - 1, 2):
+            row = ""
+            for x in range(len(matrix[y])):
+                top = matrix[y][x]
+                bot = matrix[y + 1][x] if y + 1 < len(matrix) else False
+                if top and bot:
+                    row += "█"
+                elif top:
+                    row += "▀"
+                elif bot:
+                    row += "▄"
+                else:
+                    row += " "
+            lines.append(row)
+        return "\n".join(lines)
+    except ImportError:
+        return None
+
+
 def advertise_mdns(port: int):
     """Announce as mediacloud.local via mDNS, if zeroconf is installed.
     Returns the Zeroconf handle (caller closes it), or None."""
@@ -266,8 +296,14 @@ def serve(library: Path, port: int = 8080, inbox: Path | None = None) -> None:
     print(f"Serving {library} on:")
     ips = lan_addresses() or ["<this machine's IP>"]
     for ip in ips:
-        print(f"  http://{ip}:{port}/")
-    print("Open one of these in VLC or a browser on your phone (same Wi-Fi/hotspot).")
+        url = f"http://{ip}:{port}/"
+        print(f"  {url}")
+        qr = _qr_text(url)
+        if qr:
+            print(qr)
+    if len(ips) > 1:
+        print("(Multiple addresses shown — use the one matching your current network.)")
+    print("Open the URL or scan the QR code in VLC (Browse → Network) or your phone browser.")
     if inbox is not None:
         print(f"Phone uploads land in {inbox}")
     zc = advertise_mdns(port)

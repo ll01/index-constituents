@@ -12,6 +12,7 @@ dependencies = []
 [project.optional-dependencies]
 s3 = ["boto3"]
 discovery = ["zeroconf"]
+qr = ["qrcode"]
 
 [project.scripts]
 mediacloud = "mediacloud.cli:main"
