@@ -104,6 +104,7 @@ def parse(filename: str) -> ParsedMedia:
         stem = (stem[: m.start()] + " " + stem[m.end():]).strip()
 
     title_end = len(stem)
+    marker_end = 0
     for pattern in _EP_PATTERNS:
         m = pattern.search(stem)
         if m:
@@ -111,6 +112,7 @@ def parse(filename: str) -> ParsedMedia:
                 season = int(m.group(1))
             episode = int(m.group(2))
             title_end = m.start()
+            marker_end = m.end()
             break
 
     year = None
@@ -120,6 +122,9 @@ def parse(filename: str) -> ParsedMedia:
         title_end = min(title_end, m.start())
 
     title = _clean_title(stem[:title_end])
+    if not title and episode is not None:
+        # "s03e01 DW.mkv" style: the title comes after the episode marker.
+        title = _clean_title(stem[marker_end:])
     if not title:  # everything got stripped; fall back to the raw stem
         title = _clean_title(_BRACKETS_RE.sub(" ", raw)) or raw
     # Dual titles ("Frieren - Sousou no Frieren"): keep the first form.

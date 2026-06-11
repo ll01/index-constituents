@@ -126,6 +126,24 @@ def cmd_url(args: argparse.Namespace) -> None:
         print(f"{key}\n  {s3.presign(key, expires_seconds=args.expires * 3600)}\n")
 
 
+def _autostart_commands(args: argparse.Namespace) -> list[str]:
+    return ["watch", "serve"] if args.serve else ["watch"]
+
+
+def cmd_install(args: argparse.Namespace) -> None:
+    from . import autostart
+
+    cfg = config_mod.load(args.config)  # validates config exists before installing
+    config_path = cfg.path.resolve() if cfg.path else None
+    autostart.install(_autostart_commands(args), config_path, dry_run=args.dry_run)
+
+
+def cmd_uninstall(args: argparse.Namespace) -> None:
+    from . import autostart
+
+    autostart.uninstall(["watch", "serve"])
+
+
 def cmd_status(args: argparse.Namespace) -> None:
     cfg = config_mod.load(args.config)
     root = cfg.library_root.expanduser()
@@ -177,6 +195,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--expires", type=int, default=24, help="link lifetime in hours (default 24)")
     p.add_argument("--all", action="store_true", help="print URLs for every match")
     p.set_defaults(func=cmd_url)
+
+    p = sub.add_parser("install", help="autostart watch (and optionally serve) at login")
+    p.add_argument("--serve", action="store_true", help="also autostart the LAN server")
+    p.add_argument("--dry-run", action="store_true", help="show what would be installed")
+    p.set_defaults(func=cmd_install)
+
+    p = sub.add_parser("uninstall", help="remove the autostart entries")
+    p.set_defaults(func=cmd_uninstall)
 
     sub.add_parser("status", help="library overview").set_defaults(func=cmd_status)
 

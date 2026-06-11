@@ -229,6 +229,34 @@ def lan_addresses() -> list[str]:
     return sorted(a for a in addrs if not a.startswith("127."))
 
 
+def advertise_mdns(port: int):
+    """Announce as mediacloud.local via mDNS, if zeroconf is installed.
+    Returns the Zeroconf handle (caller closes it), or None."""
+    try:
+        from zeroconf import ServiceInfo, Zeroconf
+    except ImportError:
+        print("Tip: `pip install zeroconf` to be reachable as http://mediacloud.local"
+              f":{port}/ and discoverable in VLC's Local Network browser.")
+        return None
+    ips = lan_addresses()
+    if not ips:
+        return None
+    zc = Zeroconf()
+    info = ServiceInfo(
+        "_http._tcp.local.",
+        "MediaCloud._http._tcp.local.",
+        addresses=[socket.inet_aton(ip) for ip in ips],
+        port=port,
+        server="mediacloud.local.",
+        properties={"path": "/"},
+    )
+    zc.register_service(info)
+    print(f"Advertised as http://mediacloud.local:{port}/ "
+          "(works in VLC's Local Network browser; some Android browsers "
+          "can't resolve .local names — use the IP there).")
+    return zc
+
+
 def serve(library: Path, port: int = 8080, inbox: Path | None = None) -> None:
     library = library.expanduser()
     if inbox is not None:
@@ -242,8 +270,12 @@ def serve(library: Path, port: int = 8080, inbox: Path | None = None) -> None:
     print("Open one of these in VLC or a browser on your phone (same Wi-Fi/hotspot).")
     if inbox is not None:
         print(f"Phone uploads land in {inbox}")
+    zc = advertise_mdns(port)
     print("Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+    finally:
+        if zc is not None:
+            zc.close()
