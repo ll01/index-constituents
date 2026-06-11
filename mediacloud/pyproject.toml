@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mediacloud"
+version = "0.1.0"
+description = "Personal hybrid-cloud media library: fuzzy-organize, serve over LAN, sync to S3"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+s3 = ["boto3"]
+
+[project.scripts]
+mediacloud = "mediacloud.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mediacloud*"]
