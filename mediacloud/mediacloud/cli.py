@@ -5,6 +5,7 @@
     mediacloud watch [--interval N] keep organizing new files as they finish
     mediacloud serve [--port N]     stream the library over local Wi-Fi
     mediacloud sync [--dry-run]     upload the library to S3
+    mediacloud pull [--dry-run]     restore the library from S3
     mediacloud url <search terms>   presigned S3 download link for a file
     mediacloud status               library overview
 """
@@ -100,6 +101,16 @@ def cmd_sync(args: argparse.Namespace) -> None:
     print(f"{len(uploaded)} file(s) {verb}, {skipped} already up to date.")
 
 
+def cmd_pull(args: argparse.Namespace) -> None:
+    cfg = config_mod.load(args.config)
+    s3 = _s3(cfg)
+    downloaded, skipped = s3.sync_down(cfg.library_root.expanduser(), dry_run=args.dry_run)
+    verb = "would download" if args.dry_run else "downloaded"
+    for key in downloaded:
+        print(f"  {verb}  {key}")
+    print(f"{len(downloaded)} file(s) {verb}, {skipped} already present locally.")
+
+
 def cmd_url(args: argparse.Namespace) -> None:
     cfg = config_mod.load(args.config)
     s3 = _s3(cfg)
@@ -156,6 +167,10 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("sync", help="upload the library to S3")
     p.add_argument("--dry-run", action="store_true", help="show what would upload")
     p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser("pull", help="restore the library from S3 (e.g. onto a new drive)")
+    p.add_argument("--dry-run", action="store_true", help="show what would download")
+    p.set_defaults(func=cmd_pull)
 
     p = sub.add_parser("url", help="presigned S3 download link for a file")
     p.add_argument("terms", nargs="+", help="search terms matched against remote paths")

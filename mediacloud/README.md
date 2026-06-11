@@ -57,6 +57,7 @@ mediacloud status               # what's in the library
 
 mediacloud serve                # stream over local Wi-Fi (port 8080)
 mediacloud sync                 # upload library to S3 (skips unchanged files)
+mediacloud pull                 # restore the library from S3 (new/replaced drive)
 mediacloud url jujutsu e025     # presigned download link for that episode
 ```
 
@@ -100,6 +101,27 @@ and mtime have stopped changing across consecutive scans, so half-written
 downloads are never picked up. It does a full catch-up scan on startup, and
 existing library folders are pinned so series keep landing in the same place
 across restarts.
+
+## Backups: use the right tool alongside this one
+
+mediacloud is a media library, not a backup system — media is re-downloadable,
+so a plain one-way mirror to S3 (`sync` up, `pull` to restore onto a new
+drive; nothing is ever deleted remotely) is the right durability level, and it
+keeps files streamable and presign-able.
+
+For irreplaceable files (documents, photos), use **restic** next to it,
+pointed at the same bucket under a different prefix:
+
+```bash
+restic -r s3:s3.amazonaws.com/my-media/backup init
+restic -r s3:s3.amazonaws.com/my-media/backup backup ~/Documents
+```
+
+That gives you client-side encryption, deduplicated snapshots, and
+point-in-time restore — protection a mirror can't provide, because a mirror
+faithfully syncs your mistakes. For an extra local copy of the media library
+on an external drive, plain `rsync -a Library/ /mnt/external/Library/` is all
+you need.
 
 ## Fuzzy matching knobs
 

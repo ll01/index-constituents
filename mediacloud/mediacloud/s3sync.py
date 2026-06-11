@@ -58,6 +58,26 @@ class S3Sync:
             uploaded.append(key)
         return uploaded, skipped
 
+    def sync_down(self, library: Path, dry_run: bool = False) -> tuple[list[str], int]:
+        """Download objects that are missing locally or differ in size.
+        Never deletes local files. Returns (downloaded_keys, skipped_count)."""
+        library = library.expanduser()
+        downloaded: list[str] = []
+        skipped = 0
+        for key, size in self.remote_objects().items():
+            rel = key[len(self.prefix):]
+            if not rel:
+                continue
+            dest = library / rel
+            if dest.exists() and dest.stat().st_size == size:
+                skipped += 1
+                continue
+            if not dry_run:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                self.client.download_file(self.bucket, key, str(dest))
+            downloaded.append(key)
+        return downloaded, skipped
+
     def presign(self, key: str, expires_seconds: int = 86400) -> str:
         return self.client.generate_presigned_url(
             "get_object",

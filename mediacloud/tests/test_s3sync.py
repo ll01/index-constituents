@@ -52,6 +52,33 @@ def test_dry_run_uploads_nothing(bucket, tmp_path):
     assert s3.remote_objects() == {}
 
 
+def test_pull_restores_library_to_empty_drive(bucket, tmp_path):
+    lib = make_library(tmp_path)
+    s3 = S3Sync(bucket=bucket, prefix="library")
+    s3.sync_up(lib)
+
+    fresh = tmp_path / "new-drive" / "Library"
+    downloaded, skipped = s3.sync_down(fresh)
+    assert len(downloaded) == 2 and skipped == 0
+    restored = fresh / "Jujutsu Kaisen" / "Season 01" / "Jujutsu Kaisen - S01E025.mkv"
+    assert restored.read_bytes() == b"x" * 1000
+
+    # Second pull: everything already present.
+    downloaded, skipped = s3.sync_down(fresh)
+    assert downloaded == [] and skipped == 2
+
+
+def test_pull_dry_run_writes_nothing(bucket, tmp_path):
+    lib = make_library(tmp_path)
+    s3 = S3Sync(bucket=bucket, prefix="library")
+    s3.sync_up(lib)
+
+    fresh = tmp_path / "fresh"
+    downloaded, _ = s3.sync_down(fresh, dry_run=True)
+    assert len(downloaded) == 2
+    assert not fresh.exists()
+
+
 def test_find_keys_and_presign(bucket, tmp_path):
     lib = make_library(tmp_path)
     s3 = S3Sync(bucket=bucket, prefix="library")
