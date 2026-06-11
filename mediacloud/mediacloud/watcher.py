@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .matcher import is_video
+from .matcher import is_junk, is_subtitle, is_video
 
 
 @dataclass
@@ -30,7 +30,9 @@ class FolderWatcher:
             if not src.is_dir():
                 continue
             for path in src.rglob("*"):
-                if not (path.is_file() and is_video(path.name)):
+                if not (path.is_file() and (is_video(path.name) or is_subtitle(path.name))):
+                    continue
+                if is_junk(path):
                     continue
                 try:
                     st = path.stat()

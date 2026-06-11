@@ -17,6 +17,18 @@ VIDEO_EXTS = {
     ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".mpg", ".mpeg",
 }
 
+SUBTITLE_EXTS = {".srt", ".ass", ".ssa", ".sub", ".idx", ".vtt", ".sup"}
+
+# Torrent folders routinely include these — we don't want them in the library.
+_JUNK_NAME_RE = re.compile(
+    r"\b(sample|ncop\d*|nced\d*|nc.?op\d*|nc.?ed\d*|creditless|preview|pv\d+|trailer|teaser)\b",
+    re.IGNORECASE,
+)
+_JUNK_FOLDERS = {
+    "extras", "featurettes", "samples", "trailers", "behind the scenes",
+    "interviews", "scenes", "shorts", "deleted scenes",
+}
+
 # Tokens that are release metadata, not part of a title.
 RELEASE_TAGS = {
     "480p", "720p", "1080p", "2160p", "4k", "8k", "uhd", "hd", "sd",
@@ -70,6 +82,36 @@ def is_video(filename: str) -> bool:
     return filename[filename.rfind("."):].lower() in VIDEO_EXTS if "." in filename else False
 
 
+def is_subtitle(filename: str) -> bool:
+    """True for .srt/.ass/etc, including language-tagged names like Show.en.srt."""
+    lower = filename.lower()
+    return any(lower.endswith(ext) for ext in SUBTITLE_EXTS)
+
+
+def subtitle_lang_ext(filename: str) -> tuple[str, str]:
+    """Split a subtitle filename into (language_tag, extension).
+
+    'Show.S01E01.en.srt'  -> ('.en', '.srt')
+    'Show.S01E01.srt'     -> ('',    '.srt')
+    """
+    lower = filename.lower()
+    for ext in SUBTITLE_EXTS:
+        if lower.endswith(ext):
+            before = filename[: -len(ext)]
+            m = re.search(r"\.([a-z]{2,3})$", before, re.IGNORECASE)
+            if m:
+                return f".{m.group(1).lower()}", ext
+            return "", ext
+    return "", ""
+
+
+def is_junk(path: "Path") -> bool:  # type: ignore[name-defined]
+    """True for samples, creditless openings, trailers, and extras folders."""
+    if _JUNK_NAME_RE.search(path.stem):
+        return True
+    return any(part.lower() in _JUNK_FOLDERS for part in path.parts[:-1])
+
+
 def _clean_title(text: str) -> str:
     words = []
     for word in text.split():
@@ -86,9 +128,15 @@ def _clean_title(text: str) -> str:
 
 
 def parse(filename: str) -> ParsedMedia:
-    """Best-effort parse of a single release filename."""
+    """Best-effort parse of a single release filename (video or subtitle)."""
     stem = filename.rsplit("/", 1)[-1]
-    if "." in stem and stem[stem.rfind("."):].lower() in VIDEO_EXTS:
+    # Strip subtitle extension (and optional language tag) before parsing.
+    if is_subtitle(stem):
+        _, sub_ext = subtitle_lang_ext(stem)
+        stem = stem[: -len(sub_ext)]  # e.g. "Show.S01E01.en" or "Show.S01E01"
+        if re.search(r"\.[a-z]{2,3}$", stem, re.IGNORECASE):
+            stem = stem[: stem.rfind(".")]  # strip ".en"
+    elif "." in stem and stem[stem.rfind("."):].lower() in VIDEO_EXTS:
         stem = stem[: stem.rfind(".")]
 
     raw = stem

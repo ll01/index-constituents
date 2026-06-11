@@ -12,7 +12,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .matcher import SeriesIndex, is_video, parse, season_hint
+from .matcher import SeriesIndex, is_junk, is_subtitle, is_video, parse, season_hint, subtitle_lang_ext
 
 _UNSAFE_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -68,7 +68,10 @@ def plan(sources: list[Path], library: Path, index: SeriesIndex,
             continue
         found.extend(
             p for p in sorted(src_dir.rglob("*"))
-            if p.is_file() and is_video(p.name) and (only is None or p in only)
+            if p.is_file()
+            and (is_video(p.name) or is_subtitle(p.name))
+            and not is_junk(p)
+            and (only is None or p in only)
         )
 
     parsed = [(path, parse(path.name)) for path in found]
@@ -80,24 +83,29 @@ def plan(sources: list[Path], library: Path, index: SeriesIndex,
 
     out: list[PlannedFile] = []
     for path, media in parsed:
-        ext = path.suffix.lower()
+        # Subtitle files keep their language tag + real extension (.en.srt).
+        if is_subtitle(path.name):
+            lang, sub_ext = subtitle_lang_ext(path.name)
+            file_ext = lang + sub_ext
+        else:
+            file_ext = path.suffix.lower()
+
         if media.is_episode:
             series = index.resolve(media.title)
             season = media.season or 1
             if not media.explicit_season:
-                # Filename had no season; a folder like "jjk s03" knows better.
                 season = season_hint(path.parent.name) or season
             dest = (
                 library
                 / _safe(series)
                 / f"Season {season:02d}"
-                / f"{_safe(series)} - S{season:02d}E{media.episode:03d}{ext}"
+                / f"{_safe(series)} - S{season:02d}E{media.episode:03d}{file_ext}"
             )
             out.append(PlannedFile(source=path, dest=dest, series=series,
                                    version=media.version))
         else:
             title = media.title + (f" ({media.year})" if media.year else "")
-            dest = library / "Movies" / f"{_safe(title)}{ext}"
+            dest = library / "Movies" / f"{_safe(title)}{file_ext}"
             out.append(PlannedFile(source=path, dest=dest, series=None,
                                    version=media.version))
     return out

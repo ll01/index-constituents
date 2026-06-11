@@ -7,6 +7,7 @@
     mediacloud sync [--dry-run]     upload the library to S3
     mediacloud pull [--dry-run]     restore the library from S3
     mediacloud url <search terms>   presigned S3 download link for a file
+    mediacloud publish              upload a presigned HTML index to S3
     mediacloud status               library overview
 """
 
@@ -128,6 +129,15 @@ def cmd_url(args: argparse.Namespace) -> None:
         print(f"{key}\n  {s3.presign(key, expires_seconds=args.expires * 3600)}\n")
 
 
+def cmd_publish(args: argparse.Namespace) -> None:
+    cfg = config_mod.load(args.config)
+    s3 = _s3(cfg)
+    expires = args.expires or cfg.publish_expires
+    url = s3.publish(expires_hours=expires)
+    print(f"Index page ({expires}h link):\n  {url}")
+    print("Bookmark this on your phone — it browses your whole library from anywhere.")
+
+
 def _autostart_commands(args: argparse.Namespace) -> list[str]:
     return ["watch", "serve"] if args.serve else ["watch"]
 
@@ -197,6 +207,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--expires", type=int, default=24, help="link lifetime in hours (default 24)")
     p.add_argument("--all", action="store_true", help="print URLs for every match")
     p.set_defaults(func=cmd_url)
+
+    p = sub.add_parser("publish", help="upload a presigned HTML index to S3 for phone browsing")
+    p.add_argument("--expires", type=int, help="link lifetime in hours (default from config)")
+    p.set_defaults(func=cmd_publish)
 
     p = sub.add_parser("install", help="autostart watch (and optionally serve) at login")
     p.add_argument("--serve", action="store_true", help="also autostart the LAN server")

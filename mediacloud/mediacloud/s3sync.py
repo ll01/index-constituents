@@ -7,7 +7,11 @@ boto3 is imported lazily so the rest of the tool runs without it installed.
 
 from __future__ import annotations
 
+import html
+import re
 from pathlib import Path
+
+_VIDEO_RE = re.compile(r"\.(mkv|mp4|avi|mov|wmv|flv|webm|m4v|ts|mpg|mpeg)$", re.IGNORECASE)
 
 
 class S3Sync:
@@ -89,3 +93,51 @@ class S3Sync:
         """Remote keys whose path contains every search term (case-insensitive)."""
         lowered = [t.lower() for t in terms]
         return [k for k in self.remote_objects() if all(t in k.lower() for t in lowered)]
+
+    def publish(self, expires_hours: int = 144) -> str:
+        """Build a static HTML index of presigned video links and upload it.
+
+        Returns the presigned URL for the index page itself.
+        expires_hours: lifetime for all links (default 144h = 6 days; AWS max is 7 days).
+        """
+        expires_sec = expires_hours * 3600
+        keys = sorted(k for k in self.remote_objects() if _VIDEO_RE.search(k))
+
+        # Group keys by first two path components after prefix (Series/Season or Movies).
+        from collections import defaultdict
+        groups: dict[str, list[str]] = defaultdict(list)
+        for key in keys:
+            rel = key[len(self.prefix):]
+            parts = rel.split("/")
+            group = "/".join(parts[:2]) if len(parts) > 2 else parts[0]
+            groups[group].append(key)
+
+        rows: list[str] = []
+        for group in sorted(groups):
+            rows.append(f"<h2>{html.escape(group)}</h2><ul>")
+            for key in sorted(groups[group]):
+                name = html.escape(key.rsplit("/", 1)[-1])
+                url = self.presign(key, expires_seconds=expires_sec)
+                rows.append(f'<li><a href="{url}">{name}</a></li>')
+            rows.append("</ul>")
+
+        body = (
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>MediaCloud</title>"
+            "<style>body{font-family:sans-serif;margin:1.5em;background:#111;color:#eee}"
+            "h2{color:#aaa;border-bottom:1px solid #333;padding-bottom:.3em}"
+            "a{color:#7ec8ff;text-decoration:none;font-size:1em;line-height:2em}"
+            "li{list-style:none}ul{padding:0 0 0 1em}</style></head>"
+            f"<body><h1>MediaCloud</h1>{''.join(rows)}</body></html>"
+        )
+
+        index_key = self.prefix + "_index.html"
+        import io
+        self.client.upload_fileobj(
+            io.BytesIO(body.encode()),
+            self.bucket,
+            index_key,
+            ExtraArgs={"ContentType": "text/html; charset=utf-8"},
+        )
+        return self.presign(index_key, expires_seconds=expires_sec)

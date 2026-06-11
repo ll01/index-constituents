@@ -37,6 +37,8 @@ endpoint_url = ""
 region = ""
 # Key prefix inside the bucket.
 prefix = "library"
+# Lifetime of presigned links in hours (AWS/R2/B2 cap is 7 days = 168h).
+publish_expires = 144
 # Credentials are read from the standard AWS chain:
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars, or ~/.aws/credentials
 
@@ -60,6 +62,7 @@ class Config:
     s3_prefix: str = "library"
     serve_port: int = 8080
     serve_inbox: str = ""
+    publish_expires: int = 144  # hours; 144h = 6 days (AWS S3 cap is 7 days)
     path: Path | None = None
 
     @property
@@ -88,6 +91,7 @@ def load(explicit: Path | None = None) -> Config:
                 s3_prefix=s3.get("prefix", "library"),
                 serve_port=int(data.get("serve", {}).get("port", 8080)),
                 serve_inbox=data.get("serve", {}).get("inbox", ""),
+                publish_expires=int(data.get("s3", {}).get("publish_expires", 144)),
                 path=candidate,
             )
     if explicit:
