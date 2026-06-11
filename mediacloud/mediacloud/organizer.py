@@ -36,14 +36,25 @@ class Report:
     planned: list[PlannedFile] = field(default_factory=list)  # dry-run only
 
 
-def plan(sources: list[Path], library: Path, index: SeriesIndex) -> list[PlannedFile]:
+def seed_from_library(library: Path, index: SeriesIndex) -> None:
+    """Pin existing series folders so new files keep matching them."""
+    library = library.expanduser()
+    if library.is_dir():
+        index.seed(sorted(
+            p.name for p in library.iterdir() if p.is_dir() and p.name != "Movies"
+        ))
+
+
+def plan(sources: list[Path], library: Path, index: SeriesIndex,
+         only: set[Path] | None = None) -> list[PlannedFile]:
     found: list[Path] = []
     for src_dir in sources:
         src_dir = src_dir.expanduser()
         if not src_dir.is_dir():
             continue
         found.extend(
-            p for p in sorted(src_dir.rglob("*")) if p.is_file() and is_video(p.name)
+            p for p in sorted(src_dir.rglob("*"))
+            if p.is_file() and is_video(p.name) and (only is None or p in only)
         )
 
     parsed = [(path, parse(path.name)) for path in found]
@@ -73,10 +84,12 @@ def plan(sources: list[Path], library: Path, index: SeriesIndex) -> list[Planned
     return out
 
 
-def organize(sources: list[Path], library: Path, index: SeriesIndex, dry_run: bool = False) -> Report:
+def organize(sources: list[Path], library: Path, index: SeriesIndex,
+             dry_run: bool = False, only: set[Path] | None = None) -> Report:
     library = library.expanduser()
+    seed_from_library(library, index)
     report = Report()
-    for item in plan(sources, library, index):
+    for item in plan(sources, library, index, only=only):
         if item.dest.exists():
             report.skipped.append(item)
             continue

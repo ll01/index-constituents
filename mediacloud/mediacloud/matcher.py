@@ -160,6 +160,13 @@ class SeriesIndex:
     threshold: float = 0.82
     aliases: dict[str, str] = field(default_factory=dict)
     _canonical: list[str] = field(default_factory=list)
+    _pinned: set[str] = field(default_factory=set)
+
+    def seed(self, names: list[str]) -> None:
+        """Register existing library folder names as pinned canonicals, so new
+        files keep landing in established folders across runs."""
+        for name in names:
+            self._pinned.add(self._register(name))
 
     def resolve(self, title: str) -> str:
         for alias, target in self.aliases.items():
@@ -172,8 +179,9 @@ class SeriesIndex:
                 best, best_score = known, score
         if best is not None and best_score >= self.threshold:
             # Prefer the shorter name as canonical ("Jujutsu Kaisen" over
-            # "Jujutsu Kaisen Shibuya Incident Arc").
-            if len(_normalize(title)) < len(_normalize(best)):
+            # "Jujutsu Kaisen Shibuya Incident Arc") — unless the existing
+            # name is pinned to a real library folder.
+            if best not in self._pinned and len(_normalize(title)) < len(_normalize(best)):
                 self._canonical[self._canonical.index(best)] = title
                 return title
             return best

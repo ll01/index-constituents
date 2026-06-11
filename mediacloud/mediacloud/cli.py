@@ -2,6 +2,7 @@
 
     mediacloud init                 create a starter config file
     mediacloud organize [--dry-run] sort source folders into the library
+    mediacloud watch [--interval N] keep organizing new files as they finish
     mediacloud serve [--port N]     stream the library over local Wi-Fi
     mediacloud sync [--dry-run]     upload the library to S3
     mediacloud url <search terms>   presigned S3 download link for a file
@@ -52,6 +53,36 @@ def cmd_organize(args: argparse.Namespace) -> None:
     done = len(report.linked) + len(report.copied) + len(report.planned)
     print(f"{done} file(s) {'planned' if args.dry_run else 'organized'}, "
           f"{len(report.skipped)} already in library.")
+
+
+def cmd_watch(args: argparse.Namespace) -> None:
+    import time
+
+    from .watcher import FolderWatcher
+
+    cfg = config_mod.load(args.config)
+    if not cfg.sources:
+        raise SystemExit("No [library] sources configured — edit your mediacloud.toml.")
+    index = SeriesIndex(threshold=cfg.threshold, aliases=cfg.aliases)
+
+    # Catch-up pass for anything that arrived while we weren't running.
+    report = organize(cfg.sources, cfg.library_root, index)
+    done = len(report.linked) + len(report.copied)
+    print(f"Startup scan: {done} file(s) organized, {len(report.skipped)} already in library.")
+    print(f"Watching {len(cfg.sources)} folder(s) every {args.interval}s; Ctrl+C to stop.")
+
+    watcher = FolderWatcher(sources=cfg.sources)
+    try:
+        while True:
+            time.sleep(args.interval)
+            ready = watcher.scan()
+            if not ready:
+                continue
+            report = organize(cfg.sources, cfg.library_root, index, only=ready)
+            for item in report.linked + report.copied:
+                print(f"  {item.source.name}\n    ->  {item.dest}")
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
 
 def cmd_serve(args: argparse.Namespace) -> None:
@@ -113,6 +144,10 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("organize", help="sort source folders into the library")
     p.add_argument("--dry-run", action="store_true", help="show the plan without linking")
     p.set_defaults(func=cmd_organize)
+
+    p = sub.add_parser("watch", help="poll source folders and organize new files as they settle")
+    p.add_argument("--interval", type=int, default=15, help="seconds between scans (default 15)")
+    p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("serve", help="stream the library over local Wi-Fi")
     p.add_argument("--port", type=int, help="override the configured port")

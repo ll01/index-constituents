@@ -52,6 +52,7 @@ S3 credentials come from the standard AWS chain (`AWS_ACCESS_KEY_ID` /
 ```bash
 mediacloud organize --dry-run   # preview how files will be sorted
 mediacloud organize             # hardlink into the clean library tree
+mediacloud watch                # keep organizing new files as they arrive
 mediacloud status               # what's in the library
 
 mediacloud serve                # stream over local Wi-Fi (port 8080)
@@ -70,6 +71,16 @@ browser. Stream in place or download.
 `mediacloud url <search terms>` and open the link on your phone. Because it's
 a plain HTTPS link, your phone's browser/download manager controls where the
 file saves — use whatever player you like afterwards.
+
+## Watch mode
+
+`mediacloud watch` polls the source folders (default every 15s, `--interval`
+to change) and is **client-agnostic**: it doesn't care whether files come from
+a torrent client, a browser, or `scp`. A file is only organized once its size
+and mtime have stopped changing across consecutive scans, so half-written
+downloads are never picked up. It does a full catch-up scan on startup, and
+existing library folders are pinned so series keep landing in the same place
+across restarts.
 
 ## Fuzzy matching knobs
 
