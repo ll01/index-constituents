@@ -44,6 +44,20 @@ def test_organize_idempotent(tmp_path):
     assert len(second.skipped) == 1
 
 
+def test_folder_name_supplies_missing_season(tmp_path):
+    src = tmp_path / "downloads"
+    folder = src / "jjk s03"
+    folder.mkdir(parents=True)
+    make(folder, "[DubZoku] Jujutsu Kaisen - 05 [Dual-Audio].mkv")
+    # Explicit season in the filename must beat the folder hint.
+    make(folder, "Jujutsu.Kaisen.S02E01.mkv")
+    library = tmp_path / "library"
+
+    organize([src], library, SeriesIndex())
+    assert (library / "Jujutsu Kaisen" / "Season 03" / "Jujutsu Kaisen - S03E005.mkv").exists()
+    assert (library / "Jujutsu Kaisen" / "Season 02" / "Jujutsu Kaisen - S02E001.mkv").exists()
+
+
 def test_dry_run_touches_nothing(tmp_path):
     src = tmp_path / "downloads"
     src.mkdir()

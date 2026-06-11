@@ -65,12 +65,31 @@ mediacloud url jujutsu e025     # presigned download link for that episode
 **Direct wireless (offline, fast):** run `mediacloud serve`, connect the phone
 to the same Wi-Fi — or to your laptop's hotspot if there's no network at all —
 and open the printed `http://<ip>:8080/` in VLC (*Browse → URL*) or any
-browser. Stream in place or download.
+browser. Stream in place or download. Downloads land in the phone's normal
+`Download/` folder, visible in the Files app, playable by any player.
+
+**Phone → PC:** the same page has a *Send to PC* button. It opens the Android
+file picker; selected files stream straight into the PC's inbox folder
+(defaults to your first source folder, so `mediacloud watch` organizes them
+automatically). Uploads stream to disk, so multi-GB episodes are fine. No app
+needed on the phone — the browser is the app. Note that `localhost` on the
+phone means the phone itself: always use the PC's LAN IP that `serve` prints.
 
 **Via S3 (anywhere):** `mediacloud sync` from home, then from anywhere run
 `mediacloud url <search terms>` and open the link on your phone. Because it's
 a plain HTTPS link, your phone's browser/download manager controls where the
 file saves — use whatever player you like afterwards.
+
+## What gets organized, and where
+
+- **Non-video files** (documents, archives, subtitles...) are ignored entirely.
+- **Videos with an episode marker** (`S02E01`, `1x05`, `Show - 25`, `2nd
+  Season`) go to `Series/Season XX/`. If the filename has no season but its
+  folder does (`jjk s03/`), the folder's season is used.
+- **Videos without an episode marker** (standalone films, `Jujutsu Kaisen 0`)
+  go to `Movies/`, with the year if one is present.
+- **Duplicates** (`... - Copy.mkv`, re-downloads from another release group)
+  parse to the same episode, map to the same library path, and are skipped.
 
 ## Watch mode
 

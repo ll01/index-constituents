@@ -7,6 +7,7 @@ streaming. Works with no internet at all — e.g. a laptop hotspot on a plane.
 from __future__ import annotations
 
 import html
+import re
 import socket
 import urllib.parse
 from functools import partial
@@ -15,11 +16,114 @@ from pathlib import Path
 
 from .matcher import is_video
 
+_CHUNK = 64 * 1024
+_FILENAME_RE = re.compile(rb'filename="([^"]*)"')
+
+
+def save_uploads(rfile, length: int, content_type: str, inbox: Path) -> list[str]:
+    """Stream a multipart/form-data body to disk; memory use stays ~64 KB
+    regardless of file size. Returns the saved filenames."""
+    m = re.search(r'boundary="?([^";]+)"?', content_type)
+    if not m or length <= 0:
+        return []
+    delim = b"\r\n--" + m.group(1).encode()
+    remaining = length
+
+    # Prefix with CRLF so the first boundary looks like every other one.
+    buf = b"\r\n"
+
+    def more() -> bool:
+        nonlocal buf, remaining
+        if remaining <= 0:
+            return False
+        chunk = rfile.read(min(_CHUNK, remaining))
+        remaining -= len(chunk)
+        buf += chunk
+        return bool(chunk)
+
+    saved: list[str] = []
+    while delim not in buf and more():
+        pass
+    if delim not in buf:
+        return []
+    buf = buf[buf.index(delim) + len(delim):]
+
+    while True:
+        while len(buf) < 2 and more():
+            pass
+        if buf.startswith(b"--") or not buf:  # closing boundary
+            break
+        while b"\r\n\r\n" not in buf and more():
+            pass
+        head, _, buf = buf.partition(b"\r\n\r\n")
+        fm = _FILENAME_RE.search(head)
+        out = None
+        if fm and fm.group(1):
+            name = Path(fm.group(1).decode("utf-8", "replace")).name  # no path tricks
+            dest, i = inbox / name, 1
+            while dest.exists():
+                dest = inbox / f"{Path(name).stem} ({i}){Path(name).suffix}"
+                i += 1
+            inbox.mkdir(parents=True, exist_ok=True)
+            out = open(dest, "wb")
+        try:
+            while True:
+                idx = buf.find(delim)
+                if idx != -1:
+                    if out:
+                        out.write(buf[:idx])
+                        saved.append(dest.name)
+                    buf = buf[idx + len(delim):]
+                    break
+                # Flush all but a tail that could hold a partial boundary.
+                keep = len(delim) - 1
+                if len(buf) > keep:
+                    if out:
+                        out.write(buf[:-keep])
+                    buf = buf[-keep:]
+                if not more():  # truncated body
+                    if out:
+                        out.write(buf)
+                        saved.append(dest.name)
+                    buf = b""
+                    break
+        finally:
+            if out:
+                out.close()
+
+    while remaining > 0:  # drain the epilogue so keep-alive stays usable
+        chunk = rfile.read(min(_CHUNK, remaining))
+        if not chunk:
+            break
+        remaining -= len(chunk)
+    return saved
+
 
 class RangeRequestHandler(SimpleHTTPRequestHandler):
-    """SimpleHTTPRequestHandler plus single-range byte serving (RFC 7233)."""
+    """SimpleHTTPRequestHandler plus single-range byte serving (RFC 7233)
+    and phone-to-PC uploads via POST /upload."""
 
     protocol_version = "HTTP/1.1"
+
+    def __init__(self, *args, inbox: Path | None = None, **kwargs):
+        self.inbox = inbox  # before super().__init__: it handles the request
+        super().__init__(*args, **kwargs)
+
+    def do_POST(self):
+        if urllib.parse.urlparse(self.path).path != "/upload" or self.inbox is None:
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        ctype = self.headers.get("Content-Type", "")
+        if not ctype.startswith("multipart/form-data"):
+            self.send_error(400, "Expected multipart/form-data")
+            return
+        saved = save_uploads(self.rfile, length, ctype, self.inbox)
+        print(f"  {self.client_address[0]} uploaded {len(saved)} file(s): {', '.join(saved)}")
+        self.send_response(303)
+        self.send_header("Location", "/")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def send_head(self):
         path = Path(self.translate_path(self.path))
@@ -78,6 +182,14 @@ class RangeRequestHandler(SimpleHTTPRequestHandler):
             icon = "📁" if entry.is_dir() else ("🎬" if is_video(entry.name) else "📄")
             rows.append(f'<li>{icon} <a href="{href}">{html.escape(name)}</a></li>')
         shown = html.escape(urllib.parse.unquote(self.path))
+        upload_form = ""
+        if self.inbox is not None:
+            upload_form = (
+                "<form method='post' enctype='multipart/form-data' action='/upload' "
+                "style='margin:1em 0;padding:0.8em;border:1px dashed #555;border-radius:8px'>"
+                "<input type='file' name='files' multiple> "
+                "<button style='padding:0.4em 1em'>Send to PC</button></form>"
+            )
         body = (
             "<!DOCTYPE html><html><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -85,7 +197,7 @@ class RangeRequestHandler(SimpleHTTPRequestHandler):
             "<style>body{font-family:sans-serif;margin:1.5em;background:#111;color:#eee}"
             "a{color:#7ec8ff;text-decoration:none;font-size:1.1em;line-height:2em}"
             "li{list-style:none}ul{padding:0}</style></head>"
-            f"<body><h2>MediaCloud {shown}</h2><ul>{''.join(rows)}</ul></body></html>"
+            f"<body><h2>MediaCloud {shown}</h2>{upload_form}<ul>{''.join(rows)}</ul></body></html>"
         ).encode("utf-8", "surrogateescape")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -117,15 +229,19 @@ def lan_addresses() -> list[str]:
     return sorted(a for a in addrs if not a.startswith("127."))
 
 
-def serve(library: Path, port: int = 8080) -> None:
+def serve(library: Path, port: int = 8080, inbox: Path | None = None) -> None:
     library = library.expanduser()
-    handler = partial(RangeRequestHandler, directory=str(library))
+    if inbox is not None:
+        inbox = inbox.expanduser()
+    handler = partial(RangeRequestHandler, directory=str(library), inbox=inbox)
     server = ThreadingHTTPServer(("0.0.0.0", port), handler)
     print(f"Serving {library} on:")
     ips = lan_addresses() or ["<this machine's IP>"]
     for ip in ips:
         print(f"  http://{ip}:{port}/")
     print("Open one of these in VLC or a browser on your phone (same Wi-Fi/hotspot).")
+    if inbox is not None:
+        print(f"Phone uploads land in {inbox}")
     print("Ctrl+C to stop.")
     try:
         server.serve_forever()

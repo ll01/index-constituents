@@ -54,6 +54,9 @@ class ParsedMedia:
     season: int | None = None
     episode: int | None = None
     year: int | None = None
+    # True when the season came from the filename itself, as opposed to the
+    # season-1 default (which a parent-folder hint may override).
+    explicit_season: bool = False
 
     @property
     def is_episode(self) -> bool:
@@ -125,10 +128,21 @@ def parse(filename: str) -> ParsedMedia:
         if first:
             title = first
 
+    explicit = season is not None
     if episode is not None and season is None:
         season = 1
 
-    return ParsedMedia(raw_name=filename, title=title, season=season, episode=episode, year=year)
+    return ParsedMedia(raw_name=filename, title=title, season=season, episode=episode,
+                       year=year, explicit_season=explicit)
+
+
+_FOLDER_SEASON_RE = re.compile(r"\bs(?:eason\s*)?(\d{1,2})\b", re.IGNORECASE)
+
+
+def season_hint(folder_name: str) -> int | None:
+    """Season number from a folder name like 'jjk s03' or 'Season 2'."""
+    m = _FOLDER_SEASON_RE.search(folder_name) or _ORDINAL_SEASON_RE.search(folder_name)
+    return int(m.group(1)) if m else None
 
 
 def _normalize(title: str) -> str:

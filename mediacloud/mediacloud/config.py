@@ -42,6 +42,9 @@ prefix = "library"
 
 [serve]
 port = 8080
+# Where files uploaded from the phone land. Defaults to the first
+# [library] source, so `mediacloud watch` organizes them automatically.
+inbox = ""
 """
 
 
@@ -56,7 +59,14 @@ class Config:
     s3_region: str = ""
     s3_prefix: str = "library"
     serve_port: int = 8080
+    serve_inbox: str = ""
     path: Path | None = None
+
+    @property
+    def inbox(self) -> Path | None:
+        if self.serve_inbox:
+            return Path(self.serve_inbox)
+        return self.sources[0] if self.sources else None
 
 
 def load(explicit: Path | None = None) -> Config:
@@ -77,6 +87,7 @@ def load(explicit: Path | None = None) -> Config:
                 s3_region=s3.get("region", ""),
                 s3_prefix=s3.get("prefix", "library"),
                 serve_port=int(data.get("serve", {}).get("port", 8080)),
+                serve_inbox=data.get("serve", {}).get("inbox", ""),
                 path=candidate,
             )
     if explicit:

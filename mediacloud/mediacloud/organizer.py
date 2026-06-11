@@ -12,7 +12,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .matcher import SeriesIndex, is_video, parse
+from .matcher import SeriesIndex, is_video, parse, season_hint
 
 _UNSAFE_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -70,6 +70,9 @@ def plan(sources: list[Path], library: Path, index: SeriesIndex,
         if media.is_episode:
             series = index.resolve(media.title)
             season = media.season or 1
+            if not media.explicit_season:
+                # Filename had no season; a folder like "jjk s03" knows better.
+                season = season_hint(path.parent.name) or season
             dest = (
                 library
                 / _safe(series)

@@ -87,7 +87,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
 def cmd_serve(args: argparse.Namespace) -> None:
     cfg = config_mod.load(args.config)
-    serve(cfg.library_root, port=args.port or cfg.serve_port)
+    serve(cfg.library_root, port=args.port or cfg.serve_port, inbox=cfg.inbox)
 
 
 def cmd_sync(args: argparse.Namespace) -> None:
